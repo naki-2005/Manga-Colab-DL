@@ -13,7 +13,10 @@ from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 console = Console()
 
 class MangaClient:
-    base_url = urlparse("https://es.ninemanga.com/")
+    base_urls = {
+        'es': urlparse("https://es.ninemanga.com/"),
+        'en': urlparse("https://ninemanga.com/")
+    }
     search_param = 'wd'
     query_param = 'waring=1'
     pre_headers = {
@@ -27,7 +30,9 @@ class MangaClient:
         'Upgrade-Insecure-Requests': '1'
     }
 
-    def __init__(self):
+    def __init__(self, language='es'):
+        self.language = language
+        self.base_url = self.base_urls.get(language, self.base_urls['es'])
         self.search_url = urljoin(self.base_url.geturl(), 'search/')
         self.updates_url = self.base_url.geturl()
         # Usamos cloudscraper en lugar de requests.Session
@@ -142,7 +147,7 @@ def download_image(url, folder, idx, semaphore):
             console.print(f"[red]Error al descargar imagen {url}: {str(e)}[/red]")
             return False
 
-def download_chapter(chapter_url, chapter_name, client):
+def download_chapter(chapter_url, chapter_name, client, manga_name, drive_path="/content/Drive/MyDrive/Mangas"):
     chapter_name = "".join(c for c in chapter_name if c.isalnum() or c in (' ', '.', '_')).rstrip()
     images = client.pictures_from_chapter(chapter_url)
     if not images:
@@ -187,10 +192,40 @@ def download_chapter(chapter_url, chapter_name, client):
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 
-    return cbz_filename
+    # Mover el archivo a Google Drive
+    try:
+        # Crear la carpeta del manga en Drive si no existe
+        manga_folder = os.path.join(drive_path, manga_name)
+        os.makedirs(manga_folder, exist_ok=True)
+        
+        # Ruta destino en Drive
+        drive_cbz_path = os.path.join(manga_folder, cbz_filename)
+        
+        # Mover el archivo
+        shutil.move(cbz_filename, drive_cbz_path)
+        console.print(f"[bold green]Archivo movido a:[/bold green] {drive_cbz_path}")
+        
+        return drive_cbz_path
+    except Exception as e:
+        console.print(f"[red]Error al mover el archivo a Google Drive: {str(e)}[/red]")
+        # Si falla el movimiento, devolver la ruta local
+        return cbz_filename
 
 def main():
-    client = MangaClient()
+    # Selección de idioma
+    console.print("\n[bold blue]Selecciona el idioma:[/bold blue]")
+    console.print("1. Español")
+    console.print("2. Inglés")
+    
+    try:
+        lang_choice = console.input("\n[bold blue]Elige el idioma (1-2): [/bold blue]").strip()
+        language = 'es' if lang_choice == '1' else 'en'
+    except:
+        language = 'es'
+        console.print("[yellow]Usando español por defecto.[/yellow]")
+
+    client = MangaClient(language=language)
+    
     try:
         query = console.input("[bold blue]Introduce el nombre del manga: [/bold blue]").strip()
         if not query:
@@ -214,6 +249,9 @@ def main():
         except ValueError:
             console.print("[red]Por favor, introduce un número válido.[/red]")
             return
+
+        selected_manga_name = mangas[manga_choice]
+        console.print(f"[bold green]Manga seleccionado:[/bold green] {selected_manga_name}")
 
         chapters, chapter_urls = client.get_chapters(manga_urls[manga_choice])
         if not chapters:
@@ -242,7 +280,7 @@ def main():
 
         console.print(f"\n[bold green]Descargando capítulos del {start_chapter + 1} al {end_chapter + 1}...[/bold green]")
         for idx in range(start_chapter, end_chapter + 1):
-            result = download_chapter(chapter_urls[idx], chapters[idx], client)
+            result = download_chapter(chapter_urls[idx], chapters[idx], client, selected_manga_name)
             if result:
                 console.print(f"[bold green]Capítulo descargado:[/bold green] {result}")
             else:
@@ -256,4 +294,4 @@ def main():
         client.close()
 
 if __name__ == '__main__':
-  main()
+    main()
