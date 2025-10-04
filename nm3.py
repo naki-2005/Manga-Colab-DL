@@ -147,7 +147,7 @@ def download_image(url, folder, idx, semaphore):
             console.print(f"[red]Error al descargar imagen {url}: {str(e)}[/red]")
             return False
 
-def download_chapter(chapter_url, chapter_name, client, manga_name, drive_path="/content/Drive/MyDrive/Mangas"):
+def download_chapter(chapter_url, chapter_name, client, manga_name, drive_path="/content/drive/MyDrive/Mangas"):
     chapter_name = "".join(c for c in chapter_name if c.isalnum() or c in (' ', '.', '_')).rstrip()
     images = client.pictures_from_chapter(chapter_url)
     if not images:
